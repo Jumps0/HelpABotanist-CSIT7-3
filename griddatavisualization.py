@@ -23,8 +23,8 @@ def random_color():
 
 # Loop through the grid squares and add a rectangle for each
 for index, row in grid_df.iterrows():
-    lat = row['latitude'] - 0.05  # Shift down by 0.05 degrees
-    lon = row['longitude'] - 0.05  # Shift left by 0.05 degrees
+    lat = row['latitude']
+    lon = row['longitude']
     
     # Create a rectangle for each grid square (0.1x0.1 degrees)
     rect = patches.Rectangle((lon, lat), 0.1, 0.1, linewidth=1,
@@ -34,7 +34,7 @@ for index, row in grid_df.iterrows():
     # Add the rectangle to the plot
     ax.add_patch(rect)
 
-# Set plot limits based on the latitude and longitude ranges (for Denmark region) -- the -0.5 nonesense is to make sure the window is the right side
+# Set plot limits based on the latitude and longitude ranges (for Denmark region) -- the -0.5 nonesense is to make sure the window is the right size
 ax.set_extent([grid_df['longitude'].min() - 0.5, grid_df['longitude'].max() + 1.0 - 0.5, 
                grid_df['latitude'].min() - 0.5, grid_df['latitude'].max() + 1.0 - 0.5], 
               crs=ccrs.PlateCarree())
