@@ -6,10 +6,12 @@
 
 import pandas as pd
 import os
-import random
 
 # Load the grid data from 'denmarkgrid.csv'
 df = pd.read_csv('denmarkgrid.csv')
+
+# Set the flag: If TRUE, the central square must have at least one instance of positive occurrence. If FALSE, start point will be picked randomly.
+require_positive_occurrence = True
 
 # Create train and test directories if they don't exist
 if not os.path.exists('train'):
@@ -17,8 +19,20 @@ if not os.path.exists('train'):
 if not os.path.exists('test'):
     os.makedirs('test')
 
-# Randomly select one grid square
-random_square = df.sample(n=1).iloc[0]
+# Select the central square
+if require_positive_occurrence:
+    # Select only squares with positive occurrences
+    positive_squares = df[df['positiveOccurences'] > 0]
+    
+    if not positive_squares.empty:
+        # Randomly select a square from the ones with positive occurrences
+        random_square = positive_squares.sample(n=1).iloc[0]
+    else:
+        raise ValueError("No grid squares with positive occurrences available.")
+else:
+    # Randomly select any grid square
+    random_square = df.sample(n=1).iloc[0]
+
 lat = random_square['latitude']
 lon = random_square['longitude']
 
@@ -44,3 +58,55 @@ train_data.to_csv(train_file, index=False)
 # Print the number of squares added to each pool
 print(f"{len(test_data)} squares added to the testing pool.")
 print(f"{len(train_data)} squares added to the training pool.")
+
+### VISUALIZATION (Optional) ###
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+
+# Visualization flag
+visualize = True
+
+if visualize:
+    # Create a plot with cartopy's PlateCarree projection
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': ccrs.PlateCarree()})
+
+    # Add features to the map (coastlines, borders, etc.)
+    ax.coastlines(resolution='10m')
+    ax.add_feature(cfeature.BORDERS, linestyle=':')
+    ax.add_feature(cfeature.LAND, edgecolor='black')
+    ax.add_feature(cfeature.OCEAN)
+
+    # Plot the training data in light blue
+    for index, row in train_data.iterrows():
+        rect = patches.Rectangle((row['longitude'], row['latitude']), 0.1, 0.1,
+                                 linewidth=1, edgecolor='black', facecolor='lightblue',
+                                 transform=ccrs.PlateCarree())
+        ax.add_patch(rect)
+
+    # Plot the testing data in yellow
+    for index, row in test_data.iterrows():
+        rect = patches.Rectangle((row['longitude'], row['latitude']), 0.1, 0.1,
+                                 linewidth=1, edgecolor='black', facecolor='yellow',
+                                 transform=ccrs.PlateCarree())
+        ax.add_patch(rect)
+
+    # Set plot limits based on the latitude and longitude ranges
+    ax.set_extent([df['longitude'].min() - 0.5, df['longitude'].max() + 1.0 - 0.5, 
+                   df['latitude'].min() - 0.5, df['latitude'].max() + 1.0 - 0.5], 
+                  crs=ccrs.PlateCarree())
+
+    # Add gridlines with labels for latitude and longitude
+    gridlines = ax.gridlines(draw_labels=True, crs=ccrs.PlateCarree(), linewidth=1, color='gray', alpha=0.5, linestyle='--')
+    gridlines.top_labels = False
+    gridlines.right_labels = False
+    gridlines.xlabel_style = {'size': 12, 'color': 'black'}
+    gridlines.ylabel_style = {'size': 12, 'color': 'black'}
+
+    # Title
+    plt.title('Training Data (Blue) vs Testing Data (Yellow)')
+
+    # Show the plot with an equal aspect ratio
+    plt.gca().set_aspect('auto', adjustable='box')
+    plt.show()
