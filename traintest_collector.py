@@ -10,8 +10,9 @@ import os
 # Load the grid data from 'denmarkgrid.csv'
 df = pd.read_csv('denmarkgrid.csv')
 
-# Set the flag: If TRUE, the central square must have at least one instance of positive occurrence. If FALSE, start point will be picked randomly.
-require_positive_occurrence = True
+# Set the flags:
+require_positive_occurrence = True  # If TRUE, the central square must have at least one instance of positive occurrence.
+random_test_split = True  # If TRUE, 20% of data will be selected randomly for testing. If FALSE, a "chunk" of the data will be selected uniformly in a 10x10 square.
 
 # Create train and test directories if they don't exist
 if not os.path.exists('train'):
@@ -19,34 +20,40 @@ if not os.path.exists('train'):
 if not os.path.exists('test'):
     os.makedirs('test')
 
-# Select the central square
-if require_positive_occurrence:
-    # Select only squares with positive occurrences
-    positive_squares = df[df['positiveOccurences'] > 0]
-    
-    if not positive_squares.empty:
-        # Randomly select a square from the ones with positive occurrences
-        random_square = positive_squares.sample(n=1).iloc[0]
-    else:
-        raise ValueError("No grid squares with positive occurrences available.")
+if random_test_split:
+    # Randomly sample 20% of the data for testing
+    test_data = df.sample(frac=0.2, random_state=42)
+    # Select the remaining squares as training data
+    train_data = df[~df.index.isin(test_data.index)]
 else:
-    # Randomly select any grid square
-    random_square = df.sample(n=1).iloc[0]
+    # Select the central square
+    if require_positive_occurrence:
+        # Select only squares with positive occurrences
+        positive_squares = df[df['positiveOccurences'] > 0]
 
-lat = random_square['latitude']
-lon = random_square['longitude']
+        if not positive_squares.empty:
+            # Randomly select a square from the ones with positive occurrences
+            random_square = positive_squares.sample(n=1).iloc[0]
+        else:
+            raise ValueError("No grid squares with positive occurrences available.")
+    else:
+        # Randomly select any grid square
+        random_square = df.sample(n=1).iloc[0]
 
-# Define the 10x10 square area around the selected square
-size = 0.5
-lat_range = (lat - size, lat + size)
-lon_range = (lon - size, lon + size)
+    lat = random_square['latitude']
+    lon = random_square['longitude']
 
-# Select the squares within this area (test data)
-test_data = df[(df['latitude'] >= lat_range[0]) & (df['latitude'] <= lat_range[1]) &
-               (df['longitude'] >= lon_range[0]) & (df['longitude'] <= lon_range[1])]
+    # Define the 10x10 square area around the selected square
+    size = 0.5
+    lat_range = (lat - size, lat + size)
+    lon_range = (lon - size, lon + size)
 
-# Select the remaining squares as training data
-train_data = df[~df.index.isin(test_data.index)]
+    # Select the squares within this area (test data)
+    test_data = df[(df['latitude'] >= lat_range[0]) & (df['latitude'] <= lat_range[1]) &
+                   (df['longitude'] >= lon_range[0]) & (df['longitude'] <= lon_range[1])]
+
+    # Select the remaining squares as training data
+    train_data = df[~df.index.isin(test_data.index)]
 
 # Save the test and training data to CSV files
 test_file = 'test/test_data.csv'
