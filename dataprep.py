@@ -99,6 +99,10 @@ df = df[~duplicates]
 
 print(f"(3) Removed {num_removed} duplicate entries in {output_file_name}")
 
+# !!! Save the new occurences.csv file !!!
+df.to_csv(output_file_name, index=False)
+print(f"...{output_file_name} has been saved.")
+
 ### 4. Create a new .csv file specifically for ML usage
 
 ## Do we have an existing template?
@@ -157,8 +161,8 @@ else:
     df_grid = pd.DataFrame({'latitude': lat_grid_flat, 'longitude': lon_grid_flat})
 
     # Finally, carefully carve out unneccessary values that aren't actually in Denmark
-    df_grid = df_grid[df_grid['decimalLatitude'] >= 54.5]
-    df_grid = df_grid[~((df_grid['decimalLatitude'] > 56.2) & (df_grid['decimalLongitude'] > 11.5))]
+    df_grid = df_grid[df_grid['latitude'] >= 54.5]
+    df_grid = df_grid[~((df_grid['latitude'] > 56.2) & (df_grid['longitude'] > 11.5))]
 
     print("...grid created.")
 
@@ -242,7 +246,7 @@ else:
     soil_data['WRB_major'] = soil_data['WRBFU'].str[:2]  # Major group (first two letters)
     soil_data['WRB_minor'] = soil_data['WRBFU'].str[2:]  # Minor qualifier (next two letters)
 
-    # Dictionary for major soil groups (Reference Soil Groups)
+    # Dictionary for major soil groups (WRB Reference Soil Groups, see [page 153]: https://www.isric.org/sites/default/files/WRB_fourth_edition_2022-12-18.pdf)
     wrb_major_names = {
         "AC": "Acrisol", "AL": "Alisol", "AN": "Andosol", "AT": "Anthrosol",
         "AR": "Arenosol", "CL": "Calcisol", "CM": "Cambisol", "CH": "Chernozem",
@@ -286,7 +290,7 @@ else:
         'rf': 'Reflectic', 'rc': 'Regic', 'rg': 'Rendzic', 're': 'Renic', 'rh': 'Rhetic', 'rm': 'Rhodic', 'rn': 'Rubic', 'ru': 'Rupic', 'sc': 'Salic', 
         'sy': 'Salinodic', 'sg': 'Saprohist', 'sl': 'Saprolithic', 'sb': 'Sapprostic', 'sm': 'Sapropelic', 'se': 'Scalpic', 'sj': 'Sculptic', 'sa': 'Selenic', 
         'sk': 'Sideralic', 'so': 'Siltic', 'sn': 'Sodic', 'sf': 'Sodifragic', 'sp': 'Spodic', 'sr': 'Stagnic', 'st': 'Stalic', 'ss': 'Stegnic', 'sx': 'Steppic', 
-        'sw': 'Sulfidic', 'sh': 'Sulfiric', 'su': 'Sulfuric', 'tc': 'Technic', 'tb': 'Technicenic', 'tt': 'Tephric', 'tf': 'Terralitic', 'tl': 'Terraquantanovic', 
+        'sw': 'Sulfidic', 'sh': 'Sulfiric', 'su': 'Sulfuric', 'tc': 'Technic', 'tb': 'Technicenic', 'tt': 'Tephric', 'tf': 'Terralitic', 'tl': 'Terraquantanovic', 'ti' : 'Thionic',
         'tk': 'Terric', 'tg': 'Tisovic', 'tr': 'Transportic', 'tn': 'Trunic', 'tw': 'Tuffic', 'uc': 'Ubric', 'ub': 'Umbritic', 'ue': 'Unerubic', 'uf': 'Uplimnic', 
         'um': 'Umbric', 'ur': 'Urbic', 'vl': 'Vermic', 've': 'Vertic', 'vh': 'Vitric', 'vr': 'Vulcanic', 'wh': 'Waterhostic', 'yg': 'Yermic'
     }
@@ -298,13 +302,13 @@ else:
     )
 
     # Ensure 'soilType' column exists; create if not
-    if 'soilType' not in data.columns:
-        data['soilType'] = "UNKNOWN"  # Initialize with "UNKNOWN"
+    if 'soilType' not in df_grid.columns:
+        df_grid['soilType'] = "UNKNOWN"  # Initialize with "UNKNOWN"
 
     # Convert data into GeoDataFrame based on coordinate positions
     data_gdf = gpd.GeoDataFrame(
-        data,
-        geometry=gpd.points_from_xy(data['decimalLongitude'], data['decimalLatitude']),
+        df_grid,
+        geometry=gpd.points_from_xy(df_grid['longitude'], df_grid['latitude']),
         crs="EPSG:4326"  # Coordinate reference system: WGS 84
     )
 
@@ -315,14 +319,20 @@ else:
     joined_data = gpd.sjoin(data_gdf, soil_data[['geometry', 'full_name']], how='left', predicate='intersects')
 
     # Assign soil types to 'soilType' column based on the join results
-    data['soilType'] = joined_data['full_name'].fillna("UNKNOWN")
+    df_grid['soilType'] = joined_data['full_name'].fillna("UNKNOWN")
 
     # Patch job because our .shp file has a few holes in it, but atleast we know what goes there
     # (Retrieved from: Soil Atlas of Europe. See page 48 for Denmark and see the first page for the soil guide)
-    df['soilType'] = df['soilType'].replace("UNKNOWN Haplic", "Cambisol Dystric")
-    df['soilType'] = df['soilType'].replace("UNKNOWN", "Cambisol Dystric")
+    df_grid['soilType'] = df_grid['soilType'].replace("UNKNOWN Haplic", "Cambisol Dystric")
+    df_grid['soilType'] = df_grid['soilType'].replace("UNKNOWN", "Cambisol Dystric")
 
     print("...soil data loaded")
+
+    # Create positive & negative occurrence columns
+    if 'positiveOccurrence' not in df_grid.columns:
+        df_grid['positiveOccurrence'] = 0  # Start at 0
+    if 'negativeOccurrence' not in df_grid.columns:
+        df_grid['negativeOccurrence'] = 0  # Start at 0
 
     ### 4. Save the new template file
     df_grid.to_csv(template_name, index=False)
@@ -343,8 +353,13 @@ def find_nearest_grid_square(lat, lon, grid_df):
     nearest_idx = distance.idxmin()
     return nearest_idx
 
-# Loop through each observation entry
+# Loop through each observation entry (from occurrences.csv), save to (ml_file_name.csv)
 for _, obs in df.iterrows():
+    # NOTE: Here we are searching through two different .csv files, so it's important to use the right variables
+    # KEY:
+    # > occurences.csv | the full data | uses: 'decimalLatitude' & 'decimalLongitude' | data frame variable: 'df'
+    # > ml_file_name.csv | the simplified data field used for ML training | uses: 'latitude' & 'longitude' | data frame variable: 'df_grid'
+
     lat = obs['decimalLatitude']
     lon = obs['decimalLongitude']
     occurrence_status = obs['occurrenceStatus']
@@ -354,17 +369,19 @@ for _, obs in df.iterrows():
 
     # Increment 'positiveOccurrence' or 'negativeOccurrence' based on 'occurrenceStatus'
     if occurrence_status == 'PRESENT':
-        df.at[nearest_idx, 'positiveOccurrence'] += 1
+        df_grid.at[nearest_idx, 'positiveOccurrence'] += 1
     else:
-        df.at[nearest_idx, 'negativeOccurrence'] += 1
+        df_grid.at[nearest_idx, 'negativeOccurrence'] += 1
 
 print(f"(5) {ml_file_name} has been updated with position and negative occurrence data.")
 
 ### 6. Add an (empty) 'label' column
-df_grid['label'] = []
+if 'label' not in df_grid.columns:
+        df_grid['label'] = ""
 
 # !!! Save the new occurrence values !!!
 df_grid.to_csv(ml_file_name, index=False)
+print(f"...{ml_file_name} has been saved.")
 
 print(f"(6) Added empty 'label' column to {ml_file_name}.")
 
