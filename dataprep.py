@@ -160,9 +160,15 @@ else:
     # Create a pandas DataFrame and populate the latitude and longitude columns
     df_grid = pd.DataFrame({'latitude': lat_grid_flat, 'longitude': lon_grid_flat})
 
+    # Shift down and left by 0.05 because of how coordinate squares are positioned
+    df_grid['latitude'] = df_grid['latitude'] - 0.05
+    df_grid['longitude'] = df_grid['longitude'] - 0.05
+
     # Finally, carefully carve out unneccessary values that aren't actually in Denmark
-    df_grid = df_grid[df_grid['latitude'] >= 54.5]
-    df_grid = df_grid[~((df_grid['latitude'] > 56.2) & (df_grid['longitude'] > 11.5))]
+    df_grid = df_grid[df_grid['latitude'] >= 54.5] # Remove values below the bottom
+    df_grid = df_grid[df_grid['latitude'] <= 57.8] # Remove values above the top
+    df_grid = df_grid[df_grid['longitude'] < 12.5] # Remove values to the right (in Sweden)
+    df_grid = df_grid[~((df_grid['latitude'] > 56.2) & (df_grid['longitude'] > 11.5))] # Remove the top right corner (Sweden)
 
     print("...grid created.")
 
@@ -230,6 +236,10 @@ else:
             value = get_value_or_retry(lon, lat, data)
             df_grid.loc[index, key] = value
     
+    # Remove any empty values (usually in the sea)
+    df_grid = df_grid.dropna(subset=['rr'])
+    df_grid = df_grid.dropna(subset=['hu'])
+
     print("...weather data loaded")
 
     ### 3. Add soil data
