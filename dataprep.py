@@ -14,11 +14,12 @@ import os
 import shutil
 import numpy as np
 import pandas as pd
-from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
 
 current_dir = os.path.dirname(os.path.abspath(__file__)) # Absolute path
-input_file_name = 'DATA (Plant 2 aka Common)\\occurrence.txt'  # Input file location (change to whatever yours is)
+input_file_name = 'DATA (Plant 1)\\occurrence.txt'  # Input file location (change to whatever yours is)
+
+ph_data_name = 'topsoildata\\LUCAS-SOIL-2018.csv' # Location of soil pH data
+moisture_data_name = 'topsoildata\\moisture\\moisture_month (4).nc' # Location of soil moisture data
 
 output_file_name = 'occurrence.csv'  # Output file location & name
 
@@ -58,6 +59,9 @@ print(f"(2) Removed any entries missing coordinate data in {output_file_name}")
 do_region_update = False
 
 if(do_region_update):
+    from geopy.geocoders import Nominatim
+    from geopy.extra.rate_limiter import RateLimiter
+
     print("(2b) Updating any missing regions... (this may take a while)")
 
     # Initialize the Nominatim Geocoder
@@ -338,13 +342,126 @@ else:
 
     print("...soil data loaded")
 
+    ### 4. Additional soil data (pH & moisture)
+    ## pH
+    # Make sure to check and see if the file is there first
+    print("...attempting to add soil pH data")
+
+    if os.path.isfile(ph_data_name):
+        # Continue!
+        from scipy.spatial import cKDTree
+
+        print(f"...'{ph_data_name}' found.")
+
+        ph_data = pd.read_csv('topsoildata\\LUCAS-SOIL-2018.csv')
+
+        # Extract latitude and longitude from the ML data and soil data
+        grid_lat_long = df_grid[['latitude', 'longitude']].values  # 'latitude' and 'longitude' columns in ML file
+        soil_lat_long = ph_data[['TH_LAT', 'TH_LONG']].values  # 'TH_LAT' and 'TH_LONG' from the soil data file
+
+        # Build a k-d tree for fast nearest-neighbor lookup
+        soil_tree = cKDTree(soil_lat_long)
+
+        # Find the nearest soil survey point for each grid point
+        distances, indices = soil_tree.query(grid_lat_long)
+
+        # NOTE: If you want to use a different pH value, change the two names in quotes below so it matches one in the csv file.
+
+        # Get the pH values for the nearest points
+        nearest_ph_values = ph_data.iloc[indices]['pH_CaCl2'].values
+
+        # Add the pH data to the machine learning grid data file
+        df_grid['pH_CaCl2'] = nearest_ph_values
+
+        print(f"...pH data added.")
+    else:
+        # File doesn't exist. Inform the user and move on
+        print(f"...failed to find '{ph_data_name}', skipping the addition of pH data.")
+
+    ## moisture
+    # Make sure to check and see if the file is there first
+    if os.path.isfile(moisture_data_name):
+        # Continue
+        print(f"...'{moisture_data_name}' found. Adding moisture data. WARNING: This may take a while.")
+
+        ds = nc.Dataset(moisture_data_name)
+
+        # Extract the relevant soil moisture variable ('sm') and all time indices
+        sm_data = ds.variables['sm'][:, :, :]  # Extract all time, lat, lon indices
+
+        # Extract latitude and longitude values from the NetCDF file
+        nc_lats = ds.variables['lat'][:]
+        nc_lons = ds.variables['lon'][:]
+
+        # Create meshgrid for lat/lon points from the NetCDF file
+        lon_grid, lat_grid = np.meshgrid(nc_lons, nc_lats)
+
+        # Create a new column in the data grid to store the averaged soil moisture values
+        df_grid['soil_moisture'] = np.nan
+
+        # Function to find the nearest lat/lon grid point from the NetCDF file
+        def find_nearest(lat, lon, lat_grid, lon_grid):
+            distance = np.sqrt((lat_grid - lat) ** 2 + (lon_grid - lon) ** 2)
+            idx = np.unravel_index(np.argmin(distance), distance.shape)
+            return idx
+
+        # Function to find the closest valid soil moisture value
+        def find_closest_valid_sm(nearest_idx, sm_data):
+            # Check if the current point has valid data
+            for radius in range(1, 5):  # Search within a 5-point radius. This may extend runtime by a bit
+                # Define the search box
+                lat_min = max(0, nearest_idx[0] - radius)
+                lat_max = min(sm_data.shape[1], nearest_idx[0] + radius)
+                lon_min = max(0, nearest_idx[1] - radius)
+                lon_max = min(sm_data.shape[2], nearest_idx[1] + radius)
+                
+                # Search within the box for valid data
+                for lat_idx in range(lat_min, lat_max + 1):
+                    for lon_idx in range(lon_min, lon_max + 1):
+                        value = np.nanmean(np.copy(sm_data[:, lat_idx, lon_idx]))
+                        if not np.isnan(value) and value != -9999:  # Found valid data
+                            return lat_idx, lon_idx
+            return None
+
+        # Loop through the data grid and find the corresponding average soil moisture value over time
+        for i, row in df_grid.iterrows():
+            lat = row['latitude']
+            lon = row['longitude']
+            
+            # Find the nearest lat/lon point in the NetCDF file
+            nearest_idx = find_nearest(lat, lon, lat_grid, lon_grid)
+            
+            # Get the soil moisture values over all time indices at that location
+            soil_moisture_values = sm_data[:, nearest_idx[0], nearest_idx[1]]
+            
+            # Calculate the average soil moisture over time for this location
+            soil_moisture_value = np.nanmean(np.copy(soil_moisture_values))  # Ignore NaN values
+            
+            if np.isnan(soil_moisture_value) or soil_moisture_value == -9999:  # No valid data at the nearest point
+                # Find the closest point with valid data
+                valid_idx = find_closest_valid_sm(nearest_idx, sm_data)
+                if valid_idx is not None:
+                    soil_moisture_values = sm_data[:, valid_idx[0], valid_idx[1]]
+                    soil_moisture_value = np.nanmean(np.copy(soil_moisture_values))  # Update to the valid data
+            
+            if soil_moisture_value != -9999:  # If valid data is found, update the grid
+                df_grid.at[i, 'soil_moisture'] = soil_moisture_value
+
+        ds.close()
+
+        print(f"...soil moisture data added.")
+
+    else:
+        # File doesn't exist. Inform the user and move on
+        print(f"...failed to find '{moisture_data_name}', skipping the addition of soil moisture data.")
+
     # Create positive & negative occurrence columns
     if 'positiveOccurrence' not in df_grid.columns:
         df_grid['positiveOccurrence'] = 0  # Start at 0
     if 'negativeOccurrence' not in df_grid.columns:
         df_grid['negativeOccurrence'] = 0  # Start at 0
 
-    ### 4. Save the new template file
+    ### 5. Save the new template file
     df_grid.to_csv(template_name, index=False)
 
     print("...finished creating new template.")
@@ -382,6 +499,12 @@ for _, obs in df.iterrows():
         df_grid.at[nearest_idx, 'positiveOccurrence'] += 1
     else:
         df_grid.at[nearest_idx, 'negativeOccurrence'] += 1
+
+# We can also "flatten" the data here so it is binary
+use_binary_occurrences = False
+if use_binary_occurrences:
+    df_grid['positiveOccurrences'] = df_grid['positiveOccurrences'].apply(lambda x: 1 if x > 0 else x)
+    df_grid['negativeOccurrence'] = df_grid['negativeOccurrence'].apply(lambda x: 1 if x > 0 else x)
 
 print(f"(5) {ml_file_name} has been updated with position and negative occurrence data.")
 
