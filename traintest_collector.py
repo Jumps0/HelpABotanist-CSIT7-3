@@ -7,8 +7,8 @@
 import pandas as pd
 import os
 
-# Load the grid data from 'denmarkgrid.csv'
-df = pd.read_csv('denmarkgrid.csv')
+# Load the grid data from 'denmarkgrid_with_labels.csv'
+df = pd.read_csv('denmarkgrid_with_labels.csv')
 
 # Set the flags:
 require_positive_occurrence = True  # If TRUE, the central square must have at least one instance of positive occurrence.
@@ -21,8 +21,8 @@ if not os.path.exists('test'):
     os.makedirs('test')
 
 if random_test_split:
-    # Randomly sample 20% of the data for testing
-    test_data = df.sample(frac=0.2, random_state=42)
+    # Randomly sample 10% of the data for testing (without random_state)
+    test_data = df.sample(frac=0.1)  # Remove random_state to get different splits every time
     # Select the remaining squares as training data
     train_data = df[~df.index.isin(test_data.index)]
 else:
@@ -66,6 +66,7 @@ train_data.to_csv(train_file, index=False)
 print(f"{len(test_data)} squares added to the testing pool.")
 print(f"{len(train_data)} squares added to the training pool.")
 
+
 ### VISUALIZATION (Optional) ###
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -100,8 +101,8 @@ if visualize:
         ax.add_patch(rect)
 
     # Set plot limits based on the latitude and longitude ranges
-    ax.set_extent([df['longitude'].min() - 0.5, df['longitude'].max() + 1.0 - 0.5, 
-                   df['latitude'].min() - 0.5, df['latitude'].max() + 1.0 - 0.5], 
+    ax.set_extent([df['longitude'].min() - 0.5, df['longitude'].max() + 1.0 - 0.5,
+                   df['latitude'].min() - 0.5, df['latitude'].max() + 1.0 - 0.5],
                   crs=ccrs.PlateCarree())
 
     # Add gridlines with labels for latitude and longitude
