@@ -7,8 +7,8 @@
 import pandas as pd
 import os
 
-# Load the grid data from 'denmarkgrid.csv'
-df = pd.read_csv('denmarkgrid.csv')
+# Load the grid data from 'datagrid_#.csv' | Pick the one of your choice, or change this to whatever you have named the .csv file
+df = pd.read_csv('datagrid_1.csv')
 
 # Set the flags:
 require_positive_occurrence = True  # If TRUE, the central square must have at least one instance of positive occurrence.
