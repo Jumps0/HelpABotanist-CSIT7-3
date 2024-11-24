@@ -81,7 +81,7 @@ def connect_islands(graph=G):
 connect_islands(G)
 
 ### 3. Do Label propagation!
-def labelprop(graph, start_percentage=0.25, max_spread=4):
+def labelprop(graph, start_percentage=0.5, unlabeled_base_value=0.5, interations=4):
     print("...performing label propagation")
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
@@ -93,32 +93,33 @@ def labelprop(graph, start_percentage=0.25, max_spread=4):
 
     # 2. Randomly choose a selection of nodes to have a label
     for n in graph.nodes:
-        if rnd.random() > start_percentage:
+        if rnd.random() > start_percentage: # These nodes start with their true value, and are never 're-predicted'
             graph.nodes[n]['label'] = graph.nodes[n]['true_label']
             graph.nodes[n]['start_empty'] = True # (Don't try and re-predict these)
+        else: # These nodes start at -1 (unlabeled, or whatever value the user wants)
+            graph.nodes[n]['label'] = unlabeled_base_value
 
     # 3. For each unlabeled node, check its neighbors, and decide what this current node should be
-    for spread in range(max_spread):
-        if spread > 0:
-            # Go through every node
-            for n in graph.nodes:
-                # and if it is not part of the base set (aka started with its correct label)
-                if graph.nodes[n]['start_empty'] == False:
-                    # Then get its neighbors, and determine the label based on that
-                    neighbors = getgraphneighbors(graph, n, spread)
-                    neighbors = list(dict.fromkeys(neighbors)) # Remove duplicates
-                    #print(f'Found {len(list(neighbors))} neighbors for this node, at depth [{spread}].')
+    for _ in range(interations):
+        # Go through every node
+        for n in graph.nodes:
+            # and if it is not part of the base set (aka started with its correct label)
+            if graph.nodes[n]['start_empty'] == False:
+                # Then get its neighbors, and determine the label based on that
+                neighbors = getgraphneighbors(graph, n, 1)
+                neighbors = list(dict.fromkeys(neighbors)) # Remove duplicates
+                #print(f'Found {len(list(neighbors))} neighbors for this node.')
 
-                    # Then go through the neighbors list to determine the label (ignore unlabel nodes)
-                    sum = 0
-                    count = 0
-                    for nb in neighbors: # Max of 4 so its not that bad
-                        if graph.nodes[nb]['label'] != -1:
-                            sum += graph.nodes[nb]['label']
-                            count += 1
-                        
-                    if count > 0: # Set the new label
-                        graph.nodes[n]['label'] = sum / count
+                # Then go through the neighbors list to determine the label (ignore unlabel nodes)
+                sum = 0
+                count = 0
+                for nb in neighbors: # Max of 4 so its not that bad
+                    if graph.nodes[nb]['label'] != -1: # Don't pick nodes that are yet to be labeled
+                        sum += graph.nodes[nb]['label']
+                        count += 1
+                    
+                if count > 0: # Set the new label
+                    graph.nodes[n]['label'] = np.clip(sum / count, 0, 1) # Clamp [0-1]
     
     # 4. Finalize the labels. Pick label via majority vote, if tie, pick randomly
     for n in graph.nodes:
@@ -149,7 +150,7 @@ def getgraphneighbors(graph, node, depth, current_depth=0, visited=None):
 
     return neighbors
 
-graph = labelprop(graph=G, max_spread=3) # Run the function
+graph = labelprop(graph=G) # Run the function
 
 ### 4. Calculate the results
 g_correct = 0
