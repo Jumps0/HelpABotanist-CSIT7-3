@@ -7,7 +7,7 @@ import random as rnd
 import matplotlib.pyplot as plt
 
 ### 1. Import the data
-data = pd.read_csv("datagrid_1.csv")
+data = pd.read_csv("datagrid.csv")
 soil_type_mapping = {soil: idx for idx, soil in enumerate(data['soilType'].unique())} # Encode soil types
 data['soilType_EC'] = data['soilType'].map(soil_type_mapping)
 
@@ -56,7 +56,7 @@ def connect_islands(graph):
     graph.add_edge(node_at_position(graph, 55.3999, 10.7999), node_at_position(graph, 55.3999, 11.1999))
     graph.add_edge(node_at_position(graph, 55.7999, 10.5999), node_at_position(graph, 55.5999, 10.4999))
 
-def setup_graph(plant="positiveOccurrence"):
+def setup_graph(plant="Calluna vulgaris"):
     if plant != "positiveOccurrence":
         print(f'Setting up graph for plant {plant}...')
 
@@ -66,7 +66,7 @@ def setup_graph(plant="positiveOccurrence"):
     # Add each data point as a node
     for idx, row in data.iterrows():
         lat, lon = round(row['latitude'], 4), round(row['longitude'], 4) # Set lat/lon + round them
-        actual_label = 1 if row['positiveOccurrence'] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
+        actual_label = 1 if row[plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
         pred_label = -1 # Start unlabeled
         node = (lat, lon) # Set position based on geo-spatial location
         # Initialize node with data as attributes
