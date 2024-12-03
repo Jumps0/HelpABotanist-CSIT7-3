@@ -56,7 +56,7 @@ def connect_islands(graph):
     graph.add_edge(node_at_position(graph, 55.3999, 10.7999), node_at_position(graph, 55.3999, 11.1999))
     graph.add_edge(node_at_position(graph, 55.7999, 10.5999), node_at_position(graph, 55.5999, 10.4999))
 
-def setup_graph(plant="Calluna vulgaris"):
+def setup_graph(plant="Calluna vulgaris", binary=True):
     if plant != "positiveOccurrence":
         print(f'Setting up graph for plant {plant}...')
 
@@ -65,10 +65,18 @@ def setup_graph(plant="Calluna vulgaris"):
     
     # Add each data point as a node
     for idx, row in data.iterrows():
+        # > Position
         lat, lon = round(row['latitude'], 4), round(row['longitude'], 4) # Set lat/lon + round them
-        actual_label = 1 if row[plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
+        # > True Occurrence
+        if binary:
+            actual_label = 1 if row[plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
+        else:
+            actual_label = row[plant]
+        # > Label
         pred_label = -1 # Start unlabeled
+
         node = (lat, lon) # Set position based on geo-spatial location
+
         # Initialize node with data as attributes
         G.add_node(node,
                 ### --------- FEATURE DATA -------------------- ###
@@ -81,7 +89,7 @@ def setup_graph(plant="Calluna vulgaris"):
                 label=pred_label, # (Used later) What we will use to predict this node
                 start_empty=False) # (Used later) If this node should be used to predict others or be predicted from a start state 
 
-    # Add edges based on nearest neighbor within the threshold in specific directions
+    # Add edges based on nearest neighbor in all 4 directions
     directions = ["north", "south", "east", "west"]
     for node in G.nodes:
         for direction in directions:
@@ -134,7 +142,7 @@ def calc_node(graph, node, neighbor):
     """
     return np.clip(node_weight, 0, 1) # Clamp [0-1]
 
-def labelprop(graph, start_percentage=0.5, unlabeled_base_value=0.5, interations=1000):
+def labelprop(graph, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
     print("...performing label propagation")
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
@@ -161,7 +169,7 @@ def labelprop(graph, start_percentage=0.5, unlabeled_base_value=0.5, interations
                 # Then get its neighbors, and determine the label based on that
                 neighbors = getgraphneighbors(graph, n, 1)
                 neighbors = list(dict.fromkeys(neighbors)) # Remove duplicates
-                #print(f'Found {len(list(neighbors))} neighbors for this node.')
+
                 # Then go through the neighbors list to determine the label (ignore unlabel nodes)
                 sum = 0
                 count = 0
@@ -231,8 +239,12 @@ def results(graph):
             else:
                 g_incorrect += 1
 
-    print(f'Scored {(g_correct / test_nodes) * 100:.2f}%, from {test_nodes} test nodes, with a graph size of {graph.number_of_nodes()}')
+    accuracy_score = round((g_correct / test_nodes) * 100, 2)
+
+    print(f'Scored {accuracy_score}%, from {test_nodes} test nodes, with a graph size of {graph.number_of_nodes()}')
     print(f'Node results: [{g_correct}] predicted correct, [{g_incorrect}] predicted incorrect')
+
+    return accuracy_score
 
 results(graph)
 
