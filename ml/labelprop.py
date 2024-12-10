@@ -62,30 +62,34 @@ def calculate_similarity(node1, node2, overload=False):
 
 
 # Step 4: Build the Graph with Limited Neighbor Connections (North, South, East, West)
-target_plant = "Calluna vulgaris"
-graph = nx.Graph()
+def build_graph(plant="Calluna vulgaris"):
+    graph = nx.Graph()
 
-# Add nodes to the graph with their features
-for i, row in data.iterrows():
+    # Add nodes to the graph with their features
+    for i, row in data.iterrows():
 
-    if True: #binary:
-        al = 1 if row[target_plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
-        # And then convert that to the tuple, where left is chance of negative occurrence, right is chance of positive occurrence
-        if al == 1:
-            actual_label = (0, 1)
+        if True: #binary:
+            al = 1 if row[plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
+            # And then convert that to the tuple, where left is chance of negative occurrence, right is chance of positive occurrence
+            if al == 1:
+                actual_label = (0, 1)
+            else:
+                actual_label = (1, 0)
+
         else:
-            actual_label = (1, 0)
+            actual_label = row[plant]
+        pred_label = (-1, -1) # Start unlabeled
 
-    else:
-        actual_label = row[plant]
-    pred_label = (-1, -1) # Start unlabeled
+        graph.add_node(i, **row.to_dict(),
+                    true_label=actual_label, # What is actually at this node
+                    label=pred_label, # (Used later) What we will use to predict this node
+                    start_empty=False) # (Used later) If this node should be used to predict others or be predicted from a start state )
+        graph.nodes[i]['name'] = i  # Assign a name to the node (its index)
 
-    graph.add_node(i, **row.to_dict(),
-                true_label=actual_label, # What is actually at this node
-                label=pred_label, # (Used later) What we will use to predict this node
-                start_empty=False) # (Used later) If this node should be used to predict others or be predicted from a start state )
-    graph.nodes[i]['name'] = i  # Assign a name to the node (its index)
+    return graph
 
+target_plant = "Calluna vulgaris"
+graph = build_graph(target_plant)
 
 # Step 5: Find the nearest node in one of the four cardinal directions
 def nearest_node(network, reference, direction, max_distance=0.12):
@@ -206,7 +210,7 @@ def calc_node(graph, node, neighbor, do_sim=True):
     return np.clip(node_weight, 0, 1) # Clamp [0-1]
 
 import random as rnd
-def labelprop(graph, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
+def labelprop(graph, finish_labels=True, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
     print("...performing label propagation")
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
@@ -247,19 +251,20 @@ def labelprop(graph, start_percentage=0.2, unlabeled_base_value=0.5, interations
                     graph.nodes[n]['label'] = np.clip(np.divide(sum, count, casting="unsafe"), 0, 1) # Clamp [0-1]
     
     # 4. Finalize the labels. Pick label via majority vote, if tie, pick randomly
-    for n in graph.nodes:
-        # Get left and right of tuple
-        l = graph.nodes[nb]['label'][0]
-        r = graph.nodes[nb]['label'][1]
+    if finish_labels:
+        for n in graph.nodes:
+            # Get left and right of tuple
+            l = graph.nodes[nb]['label'][0]
+            r = graph.nodes[nb]['label'][1]
 
-        if l == 0.5 and r == 0.5: # TIE (random)
-            l = rnd.uniform(0, 1)
-            r = 1 if l == 0 else 1
-        else: # VOTE (round to nearest)
-            l = round(l)
-            r = round(r)
-        
-        graph.nodes[n]['label'] = (l, r) # Set new FINAL label
+            if l == 0.5 and r == 0.5: # TIE (random)
+                l = rnd.uniform(0, 1)
+                r = 1 if l == 0 else 1
+            else: # VOTE (round to nearest)
+                l = round(l)
+                r = round(r)
+            
+            graph.nodes[n]['label'] = (l, r) # Set new FINAL label
 
     # 5. Return completed graph
     print("...label propagation completed.")
@@ -294,7 +299,7 @@ def getgraphneighbors(graph, node, depth, current_depth=0, visited=None):
     return neighbors
 
 # Start percentage: 0.X -> XX% start unlabeled, and are used in LP
-graph = labelprop(graph, start_percentage=0.2, interations=100) # Run the function
+graph = labelprop(graph, finish_labels=True, start_percentage=0.2, interations=100) # Run the function
 
 ### 4. Calculate the results
 def results(graph):
@@ -318,3 +323,11 @@ def results(graph):
     return accuracy_score
 
 results(graph)
+
+def query_location(graph, lat, lon): # Get the final label of a node after the LP process has happened on the graph
+    # Calculate Euclidean distance to find the nearest node
+    distances = np.sqrt((data['latitude'] - lat)**2 + (data['longitude'] - lon)**2)
+    nearest_index = distances.idxmin()
+    prediction = graph.nodes[nearest_index]['label']
+
+    return prediction[1] # Return right side which is positive probability
