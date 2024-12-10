@@ -146,7 +146,9 @@ def build_graph(plant="Calluna vulgaris"):
 
     return graph
 
-target_plant = "Calluna vulgaris"
+# Rumex acetosa
+# Calluna vulgaris
+target_plant = "Rumex acetosa"
 graph = build_graph(target_plant)
 
 def plot_graph(graph, title):
@@ -196,13 +198,14 @@ def calc_node(graph, node, neighbor, do_sim=True):
         # Multiply it by the similarity
         r = r * similarity
         l = 1 - r
+        #print(f"Pre: {node_weight} | Post: {(l, r)}")
         node_weight = (l, r)
 
     return np.clip(node_weight, 0, 1) # Clamp [0-1]
 
 # 5. Perform label propagation
 import random as rnd
-def labelprop(graph, finish_labels=True, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
+def labelprop(graph, finish_labels=True, only_negatives=False, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
     print("...performing label propagation")
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
@@ -236,7 +239,7 @@ def labelprop(graph, finish_labels=True, start_percentage=0.2, unlabeled_base_va
                 count = 0
                 for nb in neighbors: # Max of 4 so its not that bad
                     if graph.nodes[nb]['label'][0] != -1 and graph.nodes[nb]['label'][1] != -1: # Don't pick nodes that are yet to be labeled
-                        node_weight = calc_node(graph, n, nb, do_sim=True) # Calculate the node's overall weight (see function for details)
+                        node_weight = calc_node(graph, n, nb, do_sim=False) # Calculate the node's overall weight (see function for details)
 
                         # Annoying breakdown
                         sum_l = sum[0]
@@ -254,21 +257,27 @@ def labelprop(graph, finish_labels=True, start_percentage=0.2, unlabeled_base_va
                     #print(f'{graph.nodes[n]['label']}')
     
     # 4. Finalize the labels. Pick label via majority vote, if tie, pick randomly
-    if finish_labels:
         for n in graph.nodes:
-            if graph.nodes[n]['start_empty'] == False:
-                # Get left and right of tuple
+            if finish_labels:
+                if graph.nodes[n]['start_empty'] == False:
+                    # Get left and right of tuple
+                    l = graph.nodes[n]['label'][0]
+                    r = graph.nodes[n]['label'][1]
+
+                    if l == 0.5 and r == 0.5: # TIE (random)
+                        l = rnd.uniform(0, 1)
+                        r = 1 if l == 0 else 1
+                    else: # VOTE (round to nearest)
+                        l = round(l)
+                        r = round(r)
+
+                    graph.nodes[n]['label'] = (l, r) # Set new FINAL label
+            
+            if only_negatives: # Overwrite a label's negative prediction if we KNOW it's actually positive
                 l = graph.nodes[n]['label'][0]
                 r = graph.nodes[n]['label'][1]
-
-                if l == 0.5 and r == 0.5: # TIE (random)
-                    l = rnd.uniform(0, 1)
-                    r = 1 if l == 0 else 1
-                else: # VOTE (round to nearest)
-                    l = round(l)
-                    r = round(r)
-
-                graph.nodes[n]['label'] = (l, r) # Set new FINAL label
+                if(round(l) == 1 and graph.nodes[n]['true_label'] == (0, 1)):
+                    graph.nodes[n]['label'] = (0, 1)
 
     # 5. Return completed graph
     print("...label propagation completed.")
