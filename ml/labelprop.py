@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 
 # Step 1: Load the Dataset
-data = pd.read_csv("datagrid1.csv")  
+data = pd.read_csv("datagrid.csv")  
 
 # Step 2: Preprocess the Data
 # Encode the categorical 'soilType' column as a unique identifier
@@ -19,7 +19,6 @@ scaler = MinMaxScaler()
 data[['latitude', 'longitude', 'tg', 'tx', 'tn', 'hu', 'rr', 'pH_CaCl2', 'soil_moisture']] = scaler.fit_transform(
     data[['latitude', 'longitude', 'tg', 'tx', 'tn', 'hu', 'rr', 'pH_CaCl2', 'soil_moisture']]
 )
-
 
 # Step 3: Define the Weighted Similarity Function with Categorical Handling
 def calculate_similarity(node1, node2, overload=False):
@@ -60,38 +59,7 @@ def calculate_similarity(node1, node2, overload=False):
 
     return similarity, feature_details  # Return both the similarity and feature-level details
 
-
-# Step 4: Build the Graph with Limited Neighbor Connections (North, South, East, West)
-def build_graph(plant="Calluna vulgaris"):
-    graph = nx.Graph()
-
-    # Add nodes to the graph with their features
-    for i, row in data.iterrows():
-
-        if True: #binary:
-            al = 1 if row[plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
-            # And then convert that to the tuple, where left is chance of negative occurrence, right is chance of positive occurrence
-            if al == 1:
-                actual_label = (0, 1)
-            else:
-                actual_label = (1, 0)
-
-        else:
-            actual_label = row[plant]
-        pred_label = (-1, -1) # Start unlabeled
-
-        graph.add_node(i, **row.to_dict(),
-                    true_label=actual_label, # What is actually at this node
-                    label=pred_label, # (Used later) What we will use to predict this node
-                    start_empty=False) # (Used later) If this node should be used to predict others or be predicted from a start state )
-        graph.nodes[i]['name'] = i  # Assign a name to the node (its index)
-
-    return graph
-
-target_plant = "Calluna vulgaris"
-graph = build_graph(target_plant)
-
-# Step 5: Find the nearest node in one of the four cardinal directions
+# Find the nearest node in one of the four cardinal directions
 def nearest_node(network, reference, direction, max_distance=0.12):
     """Find the nearest node in a specified direction (north, south, east, or west)"""
     ref_lat, ref_lon = reference
@@ -120,15 +88,12 @@ def nearest_node(network, reference, direction, max_distance=0.12):
 
     return closest_node
 
-
-# Step 6: Add Edges for Each Node Based on Proximity (North, South, East, West)
-cardinal_directions = ["north", "south", "east", "west"]
-
-
-def add_edges_to_neighbors(i, data, graph, report_file):
+def add_edges_to_neighbors(i, data, graph, report_file = None):
     node = data.iloc[i]
     latitude, longitude = node['latitude'], node['longitude']
     neighbors_info = []
+
+    cardinal_directions = ["north", "south", "east", "west"]
 
     # Find the closest neighbors in each direction
     for direction in cardinal_directions:
@@ -140,7 +105,7 @@ def add_edges_to_neighbors(i, data, graph, report_file):
             neighbors_info.append((neighbor, similarity, feature_details))
 
     # Log the relationship details for the node with detailed calculations
-    if neighbors_info:
+    if neighbors_info and report_file != None:
         report_file.write(f"Node {i} ({latitude:.4f}, {longitude:.4f}) has {len(neighbors_info)} neighbors:\n")
         for neighbor, similarity, feature_details in neighbors_info:
             report_file.write(f"  - With Neighbor {neighbor} has similarity of {similarity:.4f}\n")
@@ -149,15 +114,41 @@ def add_edges_to_neighbors(i, data, graph, report_file):
                 report_file.write(f"      - {feature}: Difference = {diff:.4f} - Weighted Diff = {weighted_diff:.4f}\n")
         report_file.write("\n")
 
+# Step 4: Build the Graph with Limited Neighbor Connections (North, South, East, West), plus add edges
+def build_graph(plant="Calluna vulgaris"):
+    print(f'...building graph.')
+    graph = nx.Graph()
 
-# Create and open a report file to log the node relationships and calculations
-with open("graph_analysis_report.txt", "w") as report_file:
+    # Add nodes to the graph with their features
+    for i, row in data.iterrows():
+
+        if True: #binary:
+            al = 1 if row[plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
+            # And then convert that to the tuple, where left is chance of negative occurrence, right is chance of positive occurrence
+            if al == 1:
+                actual_label = (0, 1)
+            else:
+                actual_label = (1, 0)
+
+        else:
+            actual_label = row[plant]
+        pred_label = (-1, -1) # Start unlabeled
+
+        graph.add_node(i, **row.to_dict(),
+                    true_label=actual_label, # What is actually at this node
+                    label=pred_label, # (Used later) What we will use to predict this node
+                    start_empty=False) # (Used later) If this node should be used to predict others or be predicted from a start state )
+        graph.nodes[i]['name'] = i  # Assign a name to the node (its index)
+
     # Add edges for each node based on neighbor relations (North, South, East, West)
     for i in range(len(data)):
-        add_edges_to_neighbors(i, data, graph, report_file)
+        add_edges_to_neighbors(i, data, graph)
 
+    return graph
 
-# Step 7: Visualize the Graph (Without Edge Labels for Visibility)
+target_plant = "Calluna vulgaris"
+graph = build_graph(target_plant)
+
 def plot_graph(graph, title):
     pos = {node: (graph.nodes[node]['longitude'], graph.nodes[node]['latitude']) for node in graph.nodes()}
     edge_weights = nx.get_edge_attributes(graph, 'weight')
@@ -199,7 +190,7 @@ def calc_node(graph, node, neighbor, do_sim=True):
     if do_sim:
         # And here we consider modifying the weight based on feature data
         similarity, _ = calculate_similarity(node, neighbor, True)
-    
+
         # Take the node's label
         r = node_weight[1]
         # Multiply it by the similarity
@@ -209,12 +200,15 @@ def calc_node(graph, node, neighbor, do_sim=True):
 
     return np.clip(node_weight, 0, 1) # Clamp [0-1]
 
+# 5. Perform label propagation
 import random as rnd
 def labelprop(graph, finish_labels=True, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
     print("...performing label propagation")
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
     # 1 = Fully occurence
+    # These values are complimentary where the left side is probability of negative occurrence,
+    # and the right side is probability of positive occurrence. They both add up to 100% or 1.
 
     # 1. Consider all nodes to be "unlabeled"
     # (This is already done in setup)
@@ -242,43 +236,43 @@ def labelprop(graph, finish_labels=True, start_percentage=0.2, unlabeled_base_va
                 count = 0
                 for nb in neighbors: # Max of 4 so its not that bad
                     if graph.nodes[nb]['label'][0] != -1 and graph.nodes[nb]['label'][1] != -1: # Don't pick nodes that are yet to be labeled
-                        node_weight = calc_node(graph, n, nb) # Calculate the node's overall weight (see function for details)
-                        #print(f'NW: {node_weight} | S: {sum}')
-                        np.add(sum, node_weight, casting="unsafe")
+                        node_weight = calc_node(graph, n, nb, do_sim=True) # Calculate the node's overall weight (see function for details)
+
+                        # Annoying breakdown
+                        sum_l = sum[0]
+                        sum_r = sum[1]
+
+                        sum_l += node_weight[0]
+                        sum_r += node_weight[1]
+                        
+                        sum = (sum_l, sum_r)
+                        
                         count += 1
                     
                 if count > 0: # Set the new label
                     graph.nodes[n]['label'] = np.clip(np.divide(sum, count, casting="unsafe"), 0, 1) # Clamp [0-1]
+                    #print(f'{graph.nodes[n]['label']}')
     
     # 4. Finalize the labels. Pick label via majority vote, if tie, pick randomly
     if finish_labels:
         for n in graph.nodes:
-            # Get left and right of tuple
-            l = graph.nodes[nb]['label'][0]
-            r = graph.nodes[nb]['label'][1]
+            if graph.nodes[n]['start_empty'] == False:
+                # Get left and right of tuple
+                l = graph.nodes[n]['label'][0]
+                r = graph.nodes[n]['label'][1]
 
-            if l == 0.5 and r == 0.5: # TIE (random)
-                l = rnd.uniform(0, 1)
-                r = 1 if l == 0 else 1
-            else: # VOTE (round to nearest)
-                l = round(l)
-                r = round(r)
-            
-            graph.nodes[n]['label'] = (l, r) # Set new FINAL label
+                if l == 0.5 and r == 0.5: # TIE (random)
+                    l = rnd.uniform(0, 1)
+                    r = 1 if l == 0 else 1
+                else: # VOTE (round to nearest)
+                    l = round(l)
+                    r = round(r)
+
+                graph.nodes[n]['label'] = (l, r) # Set new FINAL label
 
     # 5. Return completed graph
     print("...label propagation completed.")
     return graph
-
-def query_location(graph, lat, lon): # Based on a finished predicting, predict what a location will say for occurrence
-    # Calculate Euclidean distance to find the nearest node
-    distances = np.sqrt((data['latitude'] - lat)**2 + (data['longitude'] - lon)**2)
-    nearest_index = distances.idxmin()
-    nearest_prediction = graph.nodes[nearest_index]['label']
-    
-    print(f"Nearest node at ({data.iloc[nearest_index]['latitude']}, {data.iloc[nearest_index]['longitude']})")
-    print(f"Predicted occurrence: {'Occurrence' if nearest_prediction == 1 else 'No Occurrence'}")
-    return nearest_prediction
 
 def getgraphneighbors(graph, node, depth, current_depth=0, visited=None):
     if visited is None:
@@ -299,30 +293,30 @@ def getgraphneighbors(graph, node, depth, current_depth=0, visited=None):
     return neighbors
 
 # Start percentage: 0.X -> XX% start unlabeled, and are used in LP
-graph = labelprop(graph, finish_labels=True, start_percentage=0.2, interations=100) # Run the function
+graph_finished = labelprop(graph, finish_labels=True, start_percentage=0.2, interations=100) # Run the function
 
-### 4. Calculate the results
-def results(graph):
+### 6. Calculate the results
+def results(g):
     g_correct = 0
     g_incorrect = 0
     test_nodes = 0
 
-    for node in graph.nodes:
-        if graph.nodes[node]['start_empty'] == False:
+    for node in g.nodes:
+        if g.nodes[node]['start_empty'] == False:
             test_nodes += 1
-            if graph.nodes[node]['label'] == graph.nodes[node]['true_label']:
+            if g.nodes[node]['label'] == g.nodes[node]['true_label']:
                 g_correct += 1
             else:
                 g_incorrect += 1
 
     accuracy_score = round((g_correct / test_nodes) * 100, 2)
 
-    print(f'Scored {accuracy_score}%, from {test_nodes} test nodes, with a graph size of {graph.number_of_nodes()}')
+    print(f'Scored {accuracy_score}%, from {test_nodes} test nodes, with a graph size of {g.number_of_nodes()}')
     print(f'Node results: [{g_correct}] predicted correct, [{g_incorrect}] predicted incorrect')
 
     return accuracy_score
 
-results(graph)
+results(graph_finished)
 
 def query_location(graph, lat, lon): # Get the final label of a node after the LP process has happened on the graph
     # Calculate Euclidean distance to find the nearest node
