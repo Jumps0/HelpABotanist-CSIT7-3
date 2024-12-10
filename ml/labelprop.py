@@ -1,3 +1,6 @@
+# Label propagation script by: Anastasios “Tasos” Benos & Cody Jackson
+# for the AAU Fall 2024 Project "Help a Botanist"
+
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -59,16 +62,14 @@ def calculate_similarity(node1, node2, overload=False):
 
 
 # Step 4: Build the Graph with Limited Neighbor Connections (North, South, East, West)
+target_plant = "Calluna vulgaris"
 graph = nx.Graph()
 
 # Add nodes to the graph with their features
 for i, row in data.iterrows():
 
-    # Gentiana pneumonanthe
-    # Calluna vulgaris
-
     if True: #binary:
-        al = 1 if row["Gentiana pneumonanthe"] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
+        al = 1 if row[target_plant] > 0 else 0 # Set the true (correct) label & Make it binary (0 or 1)
         # And then convert that to the tuple, where left is chance of negative occurrence, right is chance of positive occurrence
         if al == 1:
             actual_label = (0, 1)
@@ -187,28 +188,6 @@ def plot_graph(graph, title):
     plt.title(title)
     plt.show()
 
-""""
-plot_graph(graph, "Weighted Graph Based on Dataset ")
-
-# Step 8: Insights - Distribution of Weights and Node Connectivity
-
-# Calculate statistics on edge weights
-edge_weights = list(nx.get_edge_attributes(graph, 'weight').values())
-print(f"Number of edges: {len(edge_weights)}")
-print(f"Min edge weight: {min(edge_weights)}")
-print(f"Max edge weight: {max(edge_weights)}")
-print(f"Average edge weight: {np.mean(edge_weights)}")
-
-# Calculate node degrees (how many neighbors each node has)
-degrees = dict(graph.degree())
-print(
-    f"Node with the maximum degree (most neighbors): {max(degrees, key=degrees.get)} with {max(degrees.values())} neighbors")
-
-# Identify well-connected nodes
-well_connected_nodes = [node for node, degree in degrees.items() if degree > np.mean(list(degrees.values()))]
-print(f"Well-connected nodes: {well_connected_nodes}")
-"""
-
 def calc_node(graph, node, neighbor, do_sim=True):
     # See what this neighbor is predicting (This is a tuple)
     node_weight = graph.nodes[neighbor]['label']
@@ -232,7 +211,6 @@ def labelprop(graph, start_percentage=0.2, unlabeled_base_value=0.5, interations
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
     # 1 = Fully occurence
-    # and number between these two is a "lean". At the end it will pick 0 or 1 based on which is closer.
 
     # 1. Consider all nodes to be "unlabeled"
     # (This is already done in setup)
