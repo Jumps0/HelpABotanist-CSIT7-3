@@ -185,27 +185,79 @@ def plot_graph(graph, title):
     plt.title(title)
     plt.show()
 
-def calc_node(graph, node, neighbor, do_sim=True):
+def get_neighbor_label(graph, node, neighbor, do_sim=True):
     # See what this neighbor is predicting (This is a tuple)
-    node_weight = graph.nodes[neighbor]['label']
+    node_label = graph.nodes[neighbor]['label']
+    similarity = 1
 
     if do_sim:
-        # And here we consider modifying the weight based on feature data
+        # And here we consider modifying the label based on feature data
         similarity, _ = calculate_similarity(node, neighbor, True)
 
-        # Take the node's label
-        r = node_weight[1]
-        # Multiply it by the similarity
-        r = r * similarity
-        l = 1 - r
-        #print(f"Pre: {node_weight} | Post: {(l, r)}")
-        node_weight = (l, r)
+    return np.clip(node_label, 0, 1), similarity # Clamp [0-1]
 
-    return np.clip(node_weight, 0, 1) # Clamp [0-1]
+def calculate_new_label(labels, similarities, do_sim=True):
+    new_label = (0, 0)
+
+    if do_sim:
+        pre = []
+        all_sim = 0
+
+        for i, lb in enumerate(labels): # Go through each label
+            # And do the initial vector * weight calculation
+            l = lb[0]
+            r = lb[1]
+
+            l = l * similarities[i]
+            r = r * similarities[i]
+
+            pre.append((l, r)) # Store for next step use
+
+            # Also add up the similarities while we're here
+            all_sim += similarities[i]
+        
+        # Then go through and add up the calculated vectors
+        post = (0, 0)
+        for v in pre:
+            l = v[0]
+            r = v[1]
+
+            post_l = post[0]
+            post_r = post[1]
+
+            post_l += l
+            post_r += r
+
+            post = (post_l, post_r)
+
+        # Then do the final division via numpy
+        final = np.divide(post, all_sim, casting="unsafe") # numpy division
+        new_label = np.clip(final, 0, 1) # Clamp [0-1]
+
+    else:
+        # This is pretty simple, just divide the sum of all the labels by the amount of lables
+        count = len(labels)
+        sum = (0, 0)
+
+        for lb in labels:
+            # Annoying breakdown
+            sum_l = sum[0]
+            sum_r = sum[1]
+
+            sum_l += lb[0]
+            sum_r += lb[1]
+            
+            sum = (sum_l, sum_r)
+
+        if count > 0: # Set the new label
+            final = np.divide(sum, count, casting="unsafe") # numpy division
+            new_label = np.clip(final, 0, 1) # Clamp [0-1]
+
+    return new_label
 
 # 5. Perform label propagation
 import random as rnd
-def labelprop(graph, finish_labels=True, only_negatives=False, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
+def labelpropagation(graph, finish_labels=True, only_negatives=False, use_similarity=True, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
     print("...performing label propagation")
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
@@ -235,26 +287,19 @@ def labelprop(graph, finish_labels=True, only_negatives=False, start_percentage=
                 neighbors = list(dict.fromkeys(neighbors)) # Remove duplicates
 
                 # Then go through the neighbors list to determine the label (ignore unlabel nodes)
-                sum = (0, 0)
-                count = 0
+                labels = []
+                similarities = []
+
                 for nb in neighbors: # Max of 4 so its not that bad
                     if graph.nodes[nb]['label'][0] != -1 and graph.nodes[nb]['label'][1] != -1: # Don't pick nodes that are yet to be labeled
-                        node_weight = calc_node(graph, n, nb, do_sim=False) # Calculate the node's overall weight (see function for details)
+                        node_label, similarity = get_neighbor_label(graph, n, nb, do_sim=use_similarity) # Gather up label and similarity (edge) value
 
-                        # Annoying breakdown
-                        sum_l = sum[0]
-                        sum_r = sum[1]
+                        labels.append(node_label)
+                        similarities.append(similarity)
 
-                        sum_l += node_weight[0]
-                        sum_r += node_weight[1]
-                        
-                        sum = (sum_l, sum_r)
-                        
-                        count += 1
-                    
-                if count > 0: # Set the new label
-                    graph.nodes[n]['label'] = np.clip(np.divide(sum, count, casting="unsafe"), 0, 1) # Clamp [0-1]
-                    #print(f'{graph.nodes[n]['label']}')
+                # Calculate the node's new label based on its neighbors info
+                graph.nodes[n]['label'] = calculate_new_label(labels, similarities, do_sim=use_similarity)
+
     
     # 4. Finalize the labels. Pick label via majority vote, if tie, pick randomly
         for n in graph.nodes:
@@ -302,7 +347,7 @@ def getgraphneighbors(graph, node, depth, current_depth=0, visited=None):
     return neighbors
 
 # Start percentage: 0.X -> XX% start unlabeled, and are used in LP
-graph_finished = labelprop(graph, finish_labels=True, start_percentage=0.2, interations=100) # Run the function
+graph_finished = labelpropagation(graph, finish_labels=True, use_similarity=True, start_percentage=0.2, interations=100) # Run the function
 
 ### 6. Calculate the results
 def results(g):
