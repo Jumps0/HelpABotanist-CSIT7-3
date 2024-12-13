@@ -7,18 +7,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 
-# Step 1: Load the Dataset
-data = pd.read_csv("datagrid.csv")  
 
-# Step 2: Preprocess the Data
-# Encode the categorical 'soilType' column as a unique identifier
-data['soilType_encoded'] = data['soilType'].astype('category').cat.codes
+def setup_data(file_name="datagrid.csv"):
+    # Step 1: Load the Dataset
+    data = pd.read_csv(file_name)  
 
-# Normalize features (keep the categorical column encoded as-is)
-scaler = MinMaxScaler()
-data[['latitude', 'longitude', 'tg', 'tx', 'tn', 'hu', 'rr', 'pH_CaCl2', 'soil_moisture']] = scaler.fit_transform(
-    data[['latitude', 'longitude', 'tg', 'tx', 'tn', 'hu', 'rr', 'pH_CaCl2', 'soil_moisture']]
-)
+    # Step 2: Preprocess the Data
+    # Encode the categorical 'soilType' column as a unique identifier
+    data['soilType_encoded'] = data['soilType'].astype('category').cat.codes
+
+    # Normalize features (keep the categorical column encoded as-is)
+    scaler = MinMaxScaler()
+    data[['latitude', 'longitude', 'tg', 'tx', 'tn', 'hu', 'rr', 'pH_CaCl2', 'soil_moisture']] = scaler.fit_transform(
+        data[['latitude', 'longitude', 'tg', 'tx', 'tn', 'hu', 'rr', 'pH_CaCl2', 'soil_moisture']]
+    )
+
+    return data
+
+# Set up the data
+data = setup_data(file_name="datagrid.csv")
 
 # Step 3: Define the Weighted Similarity Function with Categorical Handling
 def calculate_similarity(node1, node2, overload=False):
@@ -137,7 +144,7 @@ def build_graph(plant="Calluna vulgaris"):
         graph.add_node(i, **row.to_dict(),
                     true_label=actual_label, # What is actually at this node
                     label=pred_label, # (Used later) What we will use to predict this node
-                    start_empty=False) # (Used later) If this node should be used to predict others or be predicted from a start state )
+                    start_empty=False) # (Used later) If this node should be used to predict others or be predicted from a start state. False = unlabled
         graph.nodes[i]['name'] = i  # Assign a name to the node (its index)
 
     # Add edges for each node based on neighbor relations (North, South, East, West)
@@ -257,7 +264,7 @@ def calculate_new_label(labels, similarities, do_sim=True):
 
 # 5. Perform label propagation
 import random as rnd
-def labelpropagation(graph, finish_labels=True, only_negatives=False, use_similarity=True, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
+def labelpropagation(graph, finish_labels=True, only_negatives=False, use_similarity=True, use_fixed_split=True, start_percentage=0.2, unlabeled_base_value=0.5, interations=1000):
     print("...performing label propagation")
     # NOTE: How does 'label' work?
     # 0 = Fully no-occurrence
@@ -269,12 +276,22 @@ def labelpropagation(graph, finish_labels=True, only_negatives=False, use_simila
     # (This is already done in setup)
 
     # 2. Randomly choose a selection of nodes to have a label
-    for n in graph.nodes:
-        if rnd.random() > start_percentage: # These nodes start with their true value, and are never 're-predicted'
-            graph.nodes[n]['label'] = graph.nodes[n]['true_label']
-            graph.nodes[n]['start_empty'] = True # (Don't try and re-predict these)
-        else: # These nodes start at -1 (unlabeled, or whatever value the user wants)
-            graph.nodes[n]['label'] = (unlabeled_base_value, unlabeled_base_value)
+    if use_fixed_split: # Alternatively, use the fixed split defined in the file
+        training_nodes = data[data['isTest'] == False].index
+        testing_nodes = data[data['isTest'] == True].index 
+        for idx in training_nodes:
+            graph.nodes[idx]['label'] = graph.nodes[idx]['true_label'] # Set true label
+            graph.nodes[idx]['start_empty'] = True
+        for idx in testing_nodes:
+            graph.nodes[idx]['label'] = (unlabeled_base_value, unlabeled_base_value) # Set base label
+            graph.nodes[idx]['start_empty'] = False
+    else:
+        for n in graph.nodes:
+            if rnd.random() > start_percentage: # These nodes start with their true value, and are never 're-predicted'
+                graph.nodes[n]['label'] = graph.nodes[n]['true_label']
+                graph.nodes[n]['start_empty'] = True # (Don't try and re-predict these)
+            else: # These nodes start at -1 (unlabeled, or whatever value the user wants)
+                graph.nodes[n]['label'] = (unlabeled_base_value, unlabeled_base_value)
 
     # 3. For each unlabeled node, check its neighbors, and decide what this current node should be
     for _ in range(interations):
@@ -347,10 +364,10 @@ def getgraphneighbors(graph, node, depth, current_depth=0, visited=None):
     return neighbors
 
 # Start percentage: 0.X -> XX% start unlabeled, and are used in LP
-graph_finished = labelpropagation(graph, finish_labels=True, use_similarity=True, start_percentage=0.2, interations=100) # Run the function
+graph_finished = labelpropagation(graph, finish_labels=True, use_fixed_split=True, use_similarity=True, start_percentage=0.2, interations=100) # Run the function
 
 ### 6. Calculate the results
-def results(g):
+def results(g, update_file=False, file_name="datagrid.csv"):
     g_correct = 0
     g_incorrect = 0
     test_nodes = 0
@@ -368,9 +385,29 @@ def results(g):
     print(f'Scored {accuracy_score}%, from {test_nodes} test nodes, with a graph size of {g.number_of_nodes()}')
     print(f'Node results: [{g_correct}] predicted correct, [{g_incorrect}] predicted incorrect')
 
+    if update_file:
+        data = pd.read_csv(file_name)  
+
+        if "predicted" not in data.columns:
+            predicted_index = data.columns.get_loc("isTest") + 1
+            data.insert(predicted_index, "predicted", np.nan)
+        
+        # Update test rows based on graph predictions
+        test_indices = data[data['isTest'] == True].index
+        
+        for idx in test_indices:
+            node_label = graph.nodes[idx].get('label', (0, 0))  # Default to (0, 0) if no label
+            right_value = node_label[1]  # Right-side value in the tuple
+            
+            # Update the "predicted" column
+            data.at[idx, 'predicted'] = right_value
+
+        # Save the updated file
+        data.to_csv(file_name, index=False)
+
     return accuracy_score
 
-results(graph_finished)
+results(graph_finished, update_file=False)
 
 def query_location(graph, lat, lon): # Get the final label of a node after the LP process has happened on the graph
     # Calculate Euclidean distance to find the nearest node
