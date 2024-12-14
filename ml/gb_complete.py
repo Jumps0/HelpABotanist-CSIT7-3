@@ -18,7 +18,7 @@ def load_and_preprocess_data(filepath, plant_column):
     data = pd.get_dummies(data, columns=['soilType'])
     
     # Features and target
-    X = data.drop(columns=['longitude', 'latitude', 'label', 'isTest'] + [plant_column])
+    X = data.drop(columns=['longitude', 'latitude', 'label', 'isTest', 'predicted'] + [plant_column])
     y = data['label']
     
     # Compute class weights
@@ -44,10 +44,31 @@ def update_with_pred(data, y_pred, filepath):
     # Update only rows where isTest == True
     test_indices = data[data['isTest'] == True].index
     data.loc[test_indices, "predicted"] = y_pred
-    
+
     # Save the updated file
     data.to_csv(filepath, index=False)
     print(f"CSV file updated with predictions and saved to: {filepath}")
+
+def plot_confusion_matrix(y_true, y_pred):
+    # Plot a confusion matrix with annotations.
+
+    conf_matrix = confusion_matrix(y_true, y_pred)
+    labels = [
+        f'TN\n{conf_matrix[0, 0]}',  # True Negative
+        f'FP\n{conf_matrix[0, 1]}',  # False Positive
+        f'FN\n{conf_matrix[1, 0]}',  # False Negative
+        f'TP\n{conf_matrix[1, 1]}'   # True Positive
+    ]
+    labels = np.array(labels).reshape(2, 2)
+
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(conf_matrix, annot=labels, fmt='', cmap='Blues',
+                xticklabels=['Predicted: No Occurrence', 'Predicted: Occurrence'],
+                yticklabels=['Actual: No Occurrence', 'Actual: Occurrence'])
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plt.title('Confusion Matrix [Gradient Boosting]')
+    plt.show()
 
 def train_and_evaluate_gb(X_train, X_test, y_train, y_test, sample_weights, detailed=False, update_csv=False, path=None, data=None):
     # Train a Gradient Boosting Classifier and evaluate its performance.
@@ -85,31 +106,10 @@ def train_and_evaluate_gb(X_train, X_test, y_train, y_test, sample_weights, deta
 
     return accuracy
 
-def plot_confusion_matrix(y_true, y_pred):
-    # Plot a confusion matrix with annotations.
-
-    conf_matrix = confusion_matrix(y_true, y_pred)
-    labels = [
-        f'TN\n{conf_matrix[0, 0]}',  # True Negative
-        f'FP\n{conf_matrix[0, 1]}',  # False Positive
-        f'FN\n{conf_matrix[1, 0]}',  # False Negative
-        f'TP\n{conf_matrix[1, 1]}'   # True Positive
-    ]
-    labels = np.array(labels).reshape(2, 2)
-
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(conf_matrix, annot=labels, fmt='', cmap='Blues',
-                xticklabels=['Predicted: No Occurrence', 'Predicted: Occurrence'],
-                yticklabels=['Actual: No Occurrence', 'Actual: Occurrence'])
-    plt.xlabel('Predicted Label')
-    plt.ylabel('True Label')
-    plt.title('Confusion Matrix [Gradient Boosting]')
-    plt.show()
-
 def main(filepath, plant_column):
     X_train, X_test, y_train, y_test, sample_weights_train, data = load_and_preprocess_data(filepath, plant_column)
     print(f"Running model for plant column: {plant_column}")
-    return train_and_evaluate_gb(X_train, X_test, y_train, y_test, sample_weights_train, path=filepath, update_csv=False, data=data)
+    return train_and_evaluate_gb(X_train, X_test, y_train, y_test, sample_weights_train, path=filepath, detailed=False, update_csv=False, data=data)
 
 def run_for_all_plants(filepath, plant_start_index):
     # Run the GB model for all plant columns starting at a specified index.
@@ -135,7 +135,7 @@ def run_for_all_plants(filepath, plant_start_index):
 """ # Uncomment this out if you want to run it solo
 if __name__ == "__main__":
     data_file = "datagrid.csv"
-    plant_column = "Cirsium arvense"
+    plant_column = "Andromeda polifolia"
     main(data_file, plant_column)
     #run_for_all_plants(data_file, 11)
 """
