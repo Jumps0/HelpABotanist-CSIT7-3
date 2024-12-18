@@ -132,12 +132,75 @@ def run_for_all_plants(filepath, plant_start_index):
     
     print(f'FINAL AVERAGE ACCURACY: {sum(all_accuracy) / len(all_accuracy)}')
 
+def run_for_all_plants_detailed(filepath, plant_start_index, output_txt="plant_resultsGB.txt"):
+
+    # Run the GB model for all plant columns starting at a specified index, save results to a .txt file.
+    
+    # Parameters:
+    # - filepath: Path to the input CSV file.
+    # - plant_start_index: Column index where plant data starts.
+    # - output_txt: Path to save the accuracy results as a text file.
+
+    import os
+
+    # Load the data
+    data = pd.read_csv(filepath)
+    plant_columns = data.columns[plant_start_index:]
+    
+    print(f"Found {len(plant_columns)} plants to process.\n")
+    
+    all_accuracy = []
+    plant_results = []
+
+    # Open the results file for writing
+    with open(output_txt, "w") as f:
+        f.write("Plant Name | Total Occurrences | Accuracy\n")
+        f.write("=" * 50 + "\n")
+
+        # Go through all plants
+        for plant in plant_columns:
+            try:
+                # Count total occurrences
+                total_occurrences = data[plant].sum()
+                
+                # Run the main function to get accuracy
+                acc = main(filepath, plant)
+                all_accuracy.append(acc)
+                
+                # Save the results
+                result_line = f"{plant} | {total_occurrences} | {acc:.4f}\n"
+                plant_results.append((plant, acc))
+                f.write(result_line)
+
+            except Exception as e:
+                error_line = f"Error processing plant {plant}: {e}\n"
+                print(error_line)
+                f.write(error_line)
+        
+        # Calculate overall metrics
+        if all_accuracy:
+            avg_accuracy = sum(all_accuracy) / len(all_accuracy)
+            min_accuracy = min(all_accuracy)
+            max_accuracy = max(all_accuracy)
+
+            # Write final metrics
+            f.write("\n")
+            f.write("=" * 50 + "\n")
+            f.write(f"FINAL AVERAGE ACCURACY: {avg_accuracy:.4f}\n")
+            f.write(f"LOWEST ACCURACY: {min_accuracy:.4f}\n")
+            f.write(f"HIGHEST ACCURACY: {max_accuracy:.4f}\n")
+        else:
+            f.write("\nNo plants processed successfully.\n")
+
+    print(f"Results have been saved to {os.path.abspath(output_txt)}")
+
 """ # Uncomment this out if you want to run it solo
 if __name__ == "__main__":
     data_file = "datagrid.csv"
-    plant_column = "Andromeda polifolia"
-    main(data_file, plant_column)
-    #run_for_all_plants(data_file, 11)
+    #plant_column = "Andromeda polifolia"
+    #main(data_file, plant_column)
+    #run_for_all_plants(data_file, 12)
+    run_for_all_plants_detailed(data_file, 12)
 """
 
 # NOTE:
