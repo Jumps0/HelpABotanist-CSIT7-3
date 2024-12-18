@@ -13,12 +13,9 @@ def load_and_preprocess_data(filepath, plant_column):
     data = pd.read_csv(filepath)
     
     data['label'] = data[plant_column].apply(lambda x: 1 if x > 0 else 0)
-    
-    # Encoding for soilType
-    data = pd.get_dummies(data, columns=['soilType'])
-    
+
     # Features and target
-    X = data.drop(columns=['longitude', 'latitude', 'label', 'isTest', 'predicted'] + [plant_column])
+    X = data.drop(columns=['longitude', 'latitude', 'label', 'isTest', 'predicted', 'soilType'] + [plant_column])
     y = data['label']
     
     # Scale numerical features
@@ -127,18 +124,81 @@ def run_for_all_plants(filepath, plant_start_index, n_neighbors=5):
     
     print(f'FINAL AVERAGE ACCURACY: {sum(all_accuracy) / len(all_accuracy)}')
 
+def run_for_all_plants_detailed(filepath, plant_start_index, output_txt="plant_resultsKNN.txt"):
+
+    # Run the GB model for all plant columns starting at a specified index, save results to a .txt file.
+    
+    # Parameters:
+    # - filepath: Path to the input CSV file.
+    # - plant_start_index: Column index where plant data starts.
+    # - output_txt: Path to save the accuracy results as a text file.
+
+    import os
+
+    # Load the data
+    data = pd.read_csv(filepath)
+    plant_columns = data.columns[plant_start_index:]
+    
+    print(f"Found {len(plant_columns)} plants to process.\n")
+    
+    all_accuracy = []
+    plant_results = []
+
+    # Open the results file for writing
+    with open(output_txt, "w") as f:
+        f.write("Plant Name | Total Occurrences | Accuracy\n")
+        f.write("=" * 50 + "\n")
+
+        # Go through all plants
+        for plant in plant_columns:
+            try:
+                # Count total occurrences
+                total_occurrences = data[plant].sum()
+                
+                # Run the main function to get accuracy
+                acc = main(filepath, plant, n_neighbors=7)
+                all_accuracy.append(acc)
+                
+                # Save the results
+                result_line = f"{plant} | {total_occurrences} | {acc:.4f}\n"
+                plant_results.append((plant, acc))
+                f.write(result_line)
+
+            except Exception as e:
+                error_line = f"Error processing plant {plant}: {e}\n"
+                print(error_line)
+                f.write(error_line)
+        
+        # Calculate overall metrics
+        if all_accuracy:
+            avg_accuracy = sum(all_accuracy) / len(all_accuracy)
+            min_accuracy = min(all_accuracy)
+            max_accuracy = max(all_accuracy)
+
+            # Write final metrics
+            f.write("\n")
+            f.write("=" * 50 + "\n")
+            f.write(f"FINAL AVERAGE ACCURACY: {avg_accuracy:.4f}\n")
+            f.write(f"LOWEST ACCURACY: {min_accuracy:.4f}\n")
+            f.write(f"HIGHEST ACCURACY: {max_accuracy:.4f}\n")
+        else:
+            f.write("\nNo plants processed successfully.\n")
+
+    print(f"Results have been saved to {os.path.abspath(output_txt)}")
+
+
 def main(filepath, plant_column, n_neighbors=5):
     X_train, X_test, y_train, y_test, data = load_and_preprocess_data(filepath, plant_column)
     print(f"Running model for plant column: {plant_column} with {n_neighbors} neighbors")
-    return train_and_evaluate_knn(X_train, X_test, y_train, y_test, n_neighbors, path=filepath, detailed=False, update_csv=False, data=data)
+    return train_and_evaluate_knn(X_train, X_test, y_train, y_test, n_neighbors, path=filepath, detailed=False, update_csv=True, data=data)
 
 """ # Uncomment this out if you want to run it solo
 if __name__ == "__main__":
     data_file = "datagrid.csv"
-    n_neighbors = 5 # Number of neighbors for KNN
     plant_column = "Andromeda polifolia"
-    main(data_file, plant_column, n_neighbors)
-    #run_for_all_plants(data_file, 12, n_neighbors)
+    main(data_file, plant_column)
+    #run_for_all_plants(data_file, 12)
+    #run_for_all_plants_detailed(data_file, 12)
 """
 
 # NOTE:
