@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FloraFinder - Plant Growth Prediction</title>
+
+    <!-- Tailwind CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.1/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <!-- External CSS -->
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <section class="flora-finder-container">
+      <h1 class="app-title">FloraFinder</h1>
+      <p class="app-description">
+        Explore plant species and see where they're most likely to grow based on
+        location
+      </p>
+
+      <!-- Search Inputs -->
+      <div class="search-container">
+        <!-- Plant Search Section -->
+        <div class="search-section">
+          <label for="species-search">Plant Search</label>
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Search for a plant..."
+            />
+            <div id="dropdown" class="dropdown-content">
+              <!-- Dropdown will be populated dynamically from CSV -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Machine Learning Model Section -->
+        <div class="search-section">
+          <label for="model-search">Machine Learning Model</label>
+          <div class="model-input-wrapper">
+            <input
+              type="text"
+              id="model-search-input"
+              placeholder="Select the method of Prediction..."
+              readonly
+              onclick="toggleDropdown()"
+            />
+            <div
+              id="model-dropdown"
+              class="dropdown-content"
+              style="display: none"
+            >
+              <a onclick="selectMethod('Label Propagation')"
+                >Label Propagation</a
+              >
+              <a onclick="selectMethod('Random Forest Classifier')"
+                >Random Forest Classifier</a
+              >
+              <a onclick="selectMethod('KNeighbors Classifier')"
+                >KNeighbors Classifier</a
+              >
+              <a onclick="selectMethod('Gradient Boosting Classifier')"
+                >Gradient Boosting Classifier</a
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button id="search-button">Occurrence</button>
+        <button id="predictionButton">Prediction</button>
+      </div>
+
+      <!-- Interactive Map -->
+      <div id="map">
+        <div
+          id="occurrence-color-description"
+          class="color-description"
+          style="display: none"
+        >
+          <strong>Occurrence Color Legend:</strong>
+          <p>
+            <span style="background-color: blue; padding: 3px">&nbsp;</span> No
+            Occurrence
+          </p>
+          <p>
+            <span style="background-color: green; padding: 3px">&nbsp;</span>
+            1-2 Occurrences
+          </p>
+          <p>
+            <span style="background-color: yellow; padding: 3px">&nbsp;</span>
+            3-5 Occurrences
+          </p>
+          <p>
+            <span style="background-color: orange; padding: 3px">&nbsp;</span>
+            6-8 Occurrences
+          </p>
+          <p>
+            <span style="background-color: red; padding: 3px">&nbsp;</span> >8
+            Occurrences
+          </p>
+        </div>
+
+        <div
+          id="prediction-color-description"
+          class="color-description"
+          style="display: none"
+        >
+          <strong>Prediction Color Legend:</strong>
+          <p>
+            <span style="background-color: #f7786b; padding: 3px">&nbsp;</span>
+            Low Intensity
+          </p>
+          <p>
+            <span style="background-color: #7b3c35; padding: 3px">&nbsp;</span>
+            High Intensity
+          </p>
+          <p>
+            <span style="background-color: rgb(214, 20, 20); padding: 3px"
+              >&nbsp;</span
+            >
+            Test
+          </p>
+          <p>
+            <span style="background-color: rgb(75, 255, 47); padding: 3px"
+              >&nbsp;</span
+            >
+            Train
+          </p>
+        </div>
+      </div>
+
+      <!-- Prediction Results -->
+      <p id="prediction-result" class="results-message">
+        Choose a plant to see predictions.
+      </p>
+      <div id="prediction-summary"></div>
+      <div id="loading-container" style="display: none">
+        <div
+          id="progress-bar"
+          style="width: 0%; height: 20px; background-color: #4caf50"
+        ></div>
+        <p id="progress-text" style="text-align: center">0%</p>
+      </div>
+    </section>
+
+    <!-- External JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chroma-js@2.1.0/chroma.min.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>

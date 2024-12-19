@@ -1,0 +1,202 @@
+.flora-finder-container {
+  background-color: #d7f8b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  font-family: Albert Sans, sans-serif;
+  color: #000;
+}
+
+.app-title {
+  font-size: 36px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.app-description {
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+#map {
+  height: 400px;
+  width: 88%;
+  border-radius: 10px;
+  right: 13%;
+  left:1%;
+  margin-top: 20px;
+}
+
+#color-legend {
+  position: fixed;
+  top: 50%; /* Adjust this value as needed */
+  right: 3%; /* Space from the right edge */
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+  font-family: Arial, sans-serif;
+  font-size: 23px;
+ /* background-color: ;  Ensure the background is white */
+  z-index: 1000; /* Ensure it stays on top of other elements */
+  max-width: 850px; /* Optional: Set a max width for better readability */
+}
+
+#color-legend h4 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.color-description {
+  position: absolute;
+  top: 50%; /* Adjust this value as needed */
+  right: 3%; /* Space from the right edge */
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+  font-family: Arial, sans-serif;
+  font-size: 20px;
+  background-color:white ; 
+  z-index: 1000; /* Ensure it stays on top of other elements */
+  max-width: 650px; /* Optional: Set a max width for better readability */
+
+  }
+  .search-section {
+    flex: 1; /* Equal width for both sections */
+    display: flex;
+    position: relative;
+    flex-direction: column; /* Align label and input vertically */
+  }
+  label {
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 14px;
+    color: #333;
+  }
+.search-container {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 800px;
+}
+
+.search-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+}
+
+.search-input-wrapper input,.model-input-wrapper input {
+  padding: 10px;
+  border: 1px solid #41b3a2;
+  border-radius: 5px;
+  width: 100%;
+  font-size: 14px;
+}
+
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: white;
+  width: 100%;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #59b86c;
+  border-radius: 5px;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+.dropdown-content a {
+  padding: 10px;
+  display: block; /* Ensure options are on separate lines */
+  text-decoration: none;
+  color: black;
+  cursor: pointer;
+}
+.dropdown-item {
+  padding: 10px;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f5f9;
+}
+
+.dropdown-content.show {
+  display: block;
+}
+
+.results-message {
+  padding: 20px;
+  background: #eef;
+  border-radius: 5px;
+  margin-top: 20px;
+}
+
+/* General button styles */
+.btn-group button {
+  background-color: white;
+  color: black;
+  border: 1px solid #41b3a2;
+  border-radius: 4px;
+  padding: 15px 27px;
+  text-align: center;
+  font-size: 16px;
+  margin-left: 15px;
+  margin-right: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Hover effect for non-active buttons */
+.btn-group button:hover:not(.active-button) {
+  background-color: #ddd; /* Hover effect for non-active buttons */
+}
+
+/* Styles for active button */
+.active-button {
+  background-color: #4CAF50; /* Green for active button */
+  color: white; /* White text for better visibility */
+  border: 2px solid #3e8e41; /* Slightly darker border */
+}
+
+/* Remove hover effect for active button */
+.btn-group button.active-button:hover {
+  background-color: #4CAF50; /* Keep green color even on hover */
+}
+
+/* General hover effect for non-active buttons */
+button:hover {
+  background-color: #1ee932; /* Hover effect for non-active buttons */
+}
+
+/* Remove focus outline */
+button:focus {
+  outline: none; /* Remove outline on focus */
+}
+
+#loading-container {
+  width: 100%;
+  max-width: 400px;
+  margin: 20px auto;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+#progress-bar {
+  transition: width 0.2s ease;
+}
