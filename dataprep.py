@@ -7,7 +7,6 @@
 # 4. Create a new .csv file based on a template we have (only use the first 8 columns)
 # - But what if I don't have a template? Create one using weather & soil data.
 # 5. Create and fill up the occurences columns
-# 6. Add an empty labels column
 
 import csv
 import os
@@ -16,10 +15,12 @@ import numpy as np
 import pandas as pd
 
 current_dir = os.path.dirname(os.path.abspath(__file__)) # Absolute path
-input_file_name = 'DATA (Plant 1)\\occurrence.txt'  # Input file location (change to whatever yours is)
+input_file_name = 'old plant data\\DATA (Plant 1)\\occurrence.txt'  # Input file location (change to whatever yours is)
 
 ph_data_name = 'topsoildata\\LUCAS-SOIL-2018.csv' # Location of soil pH data
 moisture_data_name = 'topsoildata\\moisture\\moisture_month (4).nc' # Location of soil moisture data
+
+ttsplit = 0.2 # Train/Test split, where this percentage is the amount of TEST values
 
 output_file_name = 'occurrence.csv'  # Output file location & name
 
@@ -190,13 +191,14 @@ else:
             time_units = time_var.units
             time_values = nc.num2date(time_var[:], units=time_units)
             
+            time_values = np.array([t.year for t in time_values])
             # Filter time values for the year 2023
-            time_2023_indices = np.where(np.array([t.year for t in time_values]) == 2023)[0]
+            #time_2023_indices = np.where(np.array([t.year for t in time_values]) == 2023)[0]
             
             # Extract the 2023 data and compute the average for the year
             values = dataset.variables[key]
             if values.ndim == 3:  # Time, latitude, longitude
-                values_2023 = values[time_2023_indices, :, :]
+                values_2023 = values[time_values, :, :]
                 values_avg_2023 = np.mean(values_2023, axis=0)  # Average over 2023
             elif values.ndim > 3:
                 raise ValueError(f"Unexpected number of dimensions in {key}: {values.ndim}")
@@ -455,6 +457,18 @@ else:
         # File doesn't exist. Inform the user and move on
         print(f"...failed to find '{moisture_data_name}', skipping the addition of soil moisture data.")
 
+    ### Add 'isTest' and 'predicted' columns
+    if 'isTest' not in df_grid.columns:
+        df_grid['isTest'] = False
+
+    if 'predicted' not in df_grid.columns:
+        df_grid['predicted'] = ""
+
+    # Populate 'isTest' with static split values based on previous info
+    as_true = int(len(df_grid) * ttsplit)
+    true_indicies = np.random.choice(df_grid.index, size=as_true, replace=False)
+    df_grid.loc[true_indicies, 'isTest'] = True
+
     # Create positive & negative occurrence columns
     if 'positiveOccurrence' not in df_grid.columns:
         df_grid['positiveOccurrence'] = 0  # Start at 0
@@ -508,15 +522,9 @@ if use_binary_occurrences:
 
 print(f"(5) {ml_file_name} has been updated with position and negative occurrence data.")
 
-### 6. Add an (empty) 'label' column
-if 'label' not in df_grid.columns:
-        df_grid['label'] = ""
-
 # !!! Save the new occurrence values !!!
 df_grid.to_csv(ml_file_name, index=False)
 print(f"...{ml_file_name} has been saved.")
-
-print(f"(6) Added empty 'label' column to {ml_file_name}.")
 
 #####
 
